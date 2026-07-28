@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Between — a two-player number deduction game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:        #0f1216;
+    --surface:    #171b21;
+    --surface-2:  #1e232b;
+    --line:       #2a3038;
+    --text:       #e9ebee;
+    --text-dim:   #9198a3;
+    --text-faint: #5b6270;
+    --signal:     #e3a542;   /* you / player 1 */
+    --signal-dim: #4a3d24;
+    --other:      #4fb8ac;   /* opponent / player 2 */
+    --other-dim:  #1f3b38;
+    --good:       #6bcf8f;
+    --good-dim:   #1c3a29;
+    --bad:        #d9705d;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Inter', system-ui, sans-serif;
+  }
+
+  h1,h2,h3,.display{
+    font-family:'Space Grotesk', 'Inter', sans-serif;
+    letter-spacing:-0.01em;
+  }
+
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  :focus-visible{
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  #app{
+    min-height:100vh;
+    max-width:460px;
+    margin:0 auto;
+    padding: 22px 18px 36px;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .screen{ display:none; flex-direction:column; flex:1; animation:rise .3s ease; }
+  .screen.active{ display:flex; }
+  @media (prefers-reduced-motion: reduce){ .screen{ animation:none; } }
+  @keyframes rise{
+    from{ opacity:0; transform:translateY(6px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  /* ---------- Typography blocks ---------- */
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+    margin-bottom:10px;
+  }
+  h1.title{ font-size:1.9rem; font-weight:700; margin:0 0 6px; color:var(--text); }
+  .lede{ color:var(--text-dim); font-size:0.95rem; line-height:1.55; margin:0 0 28px; }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    appearance:none; border:none; cursor:pointer;
+    width:100%;
+    padding:15px 18px;
+    border-radius:var(--radius-md);
+    font-family:'Space Grotesk', sans-serif;
+    font-size:1rem; font-weight:600;
+    color:var(--ink);
+    background:var(--signal);
+    transition:transform .1s ease, opacity .1s ease;
+  }
+  .btn:active{ transform:scale(0.98); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn.ghost{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+  }
+  .btn.other{ background:var(--other); }
+  .btn-row{ display:flex; gap:10px; }
+  .btn-row .btn{ width:auto; flex:1; }
+
+  .stack{ display:flex; flex-direction:column; gap:12px; }
+  .spacer{ flex:1; }
+
+  /* ---------- Inputs ---------- */
+  label.field-label{
+    display:block;
+    font-size:0.78rem;
+    color:var(--text-faint);
+    margin:0 0 7px 2px;
+    font-family:'IBM Plex Mono', monospace;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+  }
+  input[type=text], input[type=number]{
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:var(--radius-sm);
+    padding:14px 14px;
+    font-size:1rem;
+    font-family:'IBM Plex Mono', monospace;
+    outline:none;
+    margin-bottom:16px;
+  }
+  input:focus{ border-color:var(--signal); }
+  input[type=number]{ text-align:center; font-size:1.3rem; }
+  input::placeholder{ color:var(--text-faint); font-family:'Inter',sans-serif; }
+  .error-text{
+    color:var(--bad); font-size:0.82rem; margin:-8px 0 14px 2px; display:none;
+  }
+
+  /* ---------- Cards ---------- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-lg);
+    padding:20px;
+    margin-bottom:16px;
+  }
+
+  /* ---------- Room code ---------- */
+  .code-display{
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    background:var(--surface-2);
+    border:1px dashed var(--line);
+    border-radius:var(--radius-md);
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .code-display .code{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:2rem; font-weight:600;
+    letter-spacing:0.18em;
+    color:var(--signal);
+  }
+  .copy-btn{
+    background:var(--surface);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    border-radius:var(--radius-sm);
+    padding:8px 12px;
+    font-size:0.78rem;
+    font-family:'IBM Plex Mono',monospace;
+    cursor:pointer;
+  }
+  .copy-btn:active{ transform:scale(0.96); }
+
+  .pulse-row{ display:flex; align-items:center; justify-content:center; gap:10px; color:var(--text-dim); font-size:0.88rem; margin-bottom:6px;}
+  .pulse-dot{
+    width:8px; height:8px; border-radius:50%;
+    background:var(--signal);
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
+  @media (prefers-reduced-motion: reduce){ .pulse-dot{ animation:none; opacity:0.8; } }
+
+  /* ---------- Game header ---------- */
+  .game-header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .room-chip{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--text-faint);
+    letter-spacing:0.08em;
+  }
+  .conn-dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--good); margin-right:6px; vertical-align:1px;
+  }
+
+  .turn-banner{
+    border-radius:var(--radius-md);
+    padding:14px 16px;
+    margin-bottom:16px;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:1.05rem;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .turn-banner.mine{ background:var(--signal-dim); color:var(--signal); border:1px solid var(--signal); }
+  .turn-banner.theirs{ background:var(--surface); color:var(--text-dim); border:1px solid var(--line); }
+
+  .your-number-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    padding:12px 16px;
+    margin-bottom:18px;
+  }
+  .your-number-row .lbl{ font-size:0.85rem; color:var(--text-dim); }
+  .your-number-row .num{ font-family:'IBM Plex Mono',monospace; font-size:1.25rem; font-weight:600; color:var(--text); }
+
+  /* ---------- Caliper / range visualization ---------- */
+  .caliper-wrap{ margin-bottom:22px; }
+  .caliper-labels{
+    display:flex; justify-content:space-between;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  .caliper{
+    position:relative;
+    height:54px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+  }
+  .caliper-track{
+    position:absolute; top:50%; left:8px; right:8px; height:2px;
+    background:var(--line); transform:translateY(-50%);
+  }
+  .caliper-zone{
+    position:absolute; top:50%; height:6px;
+    background:var(--signal);
+    opacity:0.35;
+    border-radius:4px;
+    transform:translateY(-50%);
+  }
+  .caliper-pin{
+    position:absolute; top:50%;
+    transform:translate(-50%,-50%);
+    width:9px; height:9px; border-radius:50%;
+    border:2px solid var(--ink);
+  }
+  .caliper-pin.up{ background:var(--signal); }
+  .caliper-pin.down{ background:var(--other); }
+  .caliper-pin.correct{ background:var(--good); width:12px; height:12px; }
+  .caliper-bound{
+    position:absolute; top:4px; bottom:4px; width:2px;
+    background:var(--text-dim);
+  }
+  .caliper-bound .tick-label{
+    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-dim);
+    white-space:nowrap;
+  }
+
+  /* ---------- Guess input ---------- */
+  .guess-row{ display:flex; gap:10px; margin-bottom:22px; }
+  .guess-row input{ margin-bottom:0; flex:1; }
+  .guess-row .btn{ width:auto; padding:0 22px; }
+
+  /* ---------- Ledger ---------- */
+  .ledger-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--text-faint); margin:0 0 10px 2px;
+  }
+  .ledger{ display:flex; flex-direction:column; gap:6px; max-height:210px; overflow-y:auto; }
+  .ledger-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-sm);
+    padding:10px 14px;
+  }
+  .ledger-row .n{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; }
+  .ledger-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.78rem; font-weight:500;
+    padding:3px 10px; border-radius:20px;
+  }
+  .ledger-tag.up{ color:var(--signal); background:var(--signal-dim); }
+  .ledger-tag.down{ color:var(--other); background:var(--other-dim); }
+  .ledger-tag.correct{ color:var(--good); background:var(--good-dim); }
+  .ledger-empty{ color:var(--text-faint); font-size:0.85rem; padding:12px 2px; }
+
+  /* ---------- Win screen ---------- */
+  .win-mark{ font-family:'Space Grotesk',sans-serif; font-size:2.1rem; font-weight:700; margin-bottom:6px; }
+  .win-sub{ color:var(--text-dim); margin-bottom:26px; line-height:1.5; }
+
+  .footnote{
+    margin-top:auto; padding-top:26px;
+    text-align:center; color:var(--text-faint); font-size:0.72rem;
+    font-family:'IBM Plex Mono', monospace;
+  }
+
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:var(--surface-2); border:1px solid var(--line);
+    color:var(--text); padding:10px 18px; border-radius:var(--radius-sm);
+    font-size:0.85rem; opacity:0; pointer-events:none;
+    transition:opacity .2s ease;
+    z-index:50;
+  }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LANDING -->
+  <div class="screen active" id="screen-landing">
+    <div class="eyebrow">Two players · one number each</div>
+    <h1 class="title">Between</h1>
+    <p class="lede">Each of you locks in a secret number from 1–100. Take turns guessing the other's — every guess narrows the range until someone lands on it exactly.</p>
+    <div class="stack">
+      <button class="btn" onclick="goTo('screen-create')">Create a room</button>
+      <button class="btn ghost" onclick="openJoinScreen()">Join a room</button>
+    </div>
+    <div class="footnote" id="config-warning" style="display:none;">Supabase isn't configured yet — see the setup notes in this file's &lt;script&gt; section.</div>
+  </div>
+
+  <!-- CREATE -->
+  <div class="screen" id="screen-create">
+    <div class="eyebrow">Step 1 of 2</div>
+    <h1 class="title">Create a room</h1>
+    <p class="lede">Pick a name and your secret number. You'll get a room code to send your friend.</p>
+    <label class="field-label" for="create-name">Your name</label>
+    <input type="text" id="create-name" placeholder="e.g. Aree" maxlength="16">
+    <label class="field-label" for="create-secret">Your secret number (1–100)</label>
+    <input type="number" id="create-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+    <div class="error-text" id="create-error">Enter a name and a number between 1 and 100.</div>
+    <div class="stack">
+      <button class="btn" id="create-submit-btn" onclick="handleCreate()">Create room</button>
+      <button class="btn ghost" onclick="goTo('screen-landing')">Back</button>
+    </div>
+  </div>
+
+  <!-- WAITING LOBBY -->
+  <div class="screen" id="screen-waiting">
+    <div class="eyebrow">Room created</div>
+    <h1 class="title">Send this code</h1>
+    <p class="lede">Your friend enters this on the join screen. Once they lock in their number, the game starts automatically.</p>
+    <div class="code-display">
+      <span class="code mono" id="waiting-code">------</span>
+      <button class="copy-btn" onclick="copyCode()">Copy</button>
+    </div>
+    <div class="pulse-row"><span class="pulse-dot"></span> Waiting for opponent to join…</div>
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="leaveRoom()">Cancel room</button>
+  </div>
+
+  <!-- JOIN -->
+  <div class="screen" id="screen-join">
+    <div class="eyebrow">Step 1 of 2</div>
+    <h1 class="title">Join a room</h1>
+    <p class="lede">Enter the code your friend sent you, then lock in your own secret number.</p>
+    <label class="field-label" for="join-code">Room code</label>
+    <input type="text" id="join-code" placeholder="e.g. K7QX2" maxlength="6" style="text-transform:uppercase; letter-spacing:0.15em; font-size:1.2rem;">
+    <label class="field-label" for="join-name">Your name</label>
+    <input type="text" id="join-name" placeholder="e.g. Sam" maxlength="16">
+    <label class="field-label" for="join-secret">Your secret number (1–100)</label>
+    <input type="number" id="join-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+    <div class="error-text" id="join-error">Check the details and try again.</div>
+    <div class="stack">
+      <button class="btn other" id="join-submit-btn" onclick="handleJoin()">Join room</button>
+      <button class="btn ghost" onclick="goTo('screen-landing')">Back</button>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div class="screen" id="screen-game">
+    <div class="game-header">
+      <span class="room-chip mono"><span class="conn-dot"></span><span id="game-room-code">------</span></span>
+      <span class="room-chip" id="game-players-label">You vs —</span>
+    </div>
+
+    <div class="turn-banner" id="turn-banner">
+      <span id="turn-banner-text">—</span>
+    </div>
+
+    <div class="your-number-row">
+      <span class="lbl">Your secret number</span>
+      <span class="num mono" id="your-number">—</span>
+    </div>
+
+    <div class="caliper-wrap">
+      <div class="caliper-labels"><span>1</span><span id="caliper-range-label">searching 1–100</span><span>100</span></div>
+      <div class="caliper" id="caliper"></div>
+    </div>
+
+    <div class="guess-row">
+      <input type="number" id="guess-input" min="1" max="100" inputmode="numeric" placeholder="Your guess">
+      <button class="btn" id="guess-submit-btn" onclick="submitGuess()">Guess</button>
+    </div>
+
+    <div class="ledger-title">Your guesses at their number</div>
+    <div class="ledger" id="ledger"></div>
+
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="leaveRoom()" style="margin-top:16px;">Leave game</button>
+  </div>
+
+  <!-- WIN -->
+  <div class="screen" id="screen-win">
+    <div class="eyebrow">Game over</div>
+    <div class="win-mark" id="win-mark">— wins</div>
+    <p class="win-sub" id="win-sub"></p>
+    <div class="stack">
+      <button class="btn" onclick="fullRestart()">Start a new room</button>
+    </div>
+  </div>
+
+  <div class="footnote">Between · a two-player deduction game</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======================================================================
+   SUPABASE CONFIG — required before this works across two devices.
+
+   1. Create a free project at https://supabase.com
+   2. Open SQL Editor and run the contents of schema.sql (shipped alongside
+      this file) — it creates the `games` table, an open access policy,
+      and turns on realtime for the table.
+   3. Go to Project Settings > API and copy:
+        - "Project URL"        -> paste below as SUPABASE_URL
+        - "anon public" key    -> paste below as SUPABASE_ANON_KEY
+   4. Save this file and host it (e.g. GitHub Pages). Both players open
+      the same URL.
+
+   Note: the anon key is meant to be public/client-side — that's normal
+   for Supabase. The open access policy in schema.sql means anyone who
+   has your project URL and anon key could read/write this table
+   directly (there's no login system here). That's a reasonable
+   trade-off for a casual game between friends; it is not meant for
+   anything sensitive.
+   ====================================================================== */
+  const SUPABASE_URL = "https://dumylrakwqoiyjeuupml.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_p235lIFzwxNbvsj0Bf71tA_H5zAaEPG";
+
+  let db = null;
+  const configured = SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY.length > 20;
+  if (configured) {
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } else {
+    document.getElementById('config-warning').style.display = 'block';
+  }
+
+  // ---------- session state ----------
+  let session = {
+    roomId: null,
+    roomCode: null,
+    playerNum: null, // 1 or 2
+  };
+  let row = null;       // latest games row
+  let channel = null;
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._h);
+    showToast._h = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function goTo(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function requireConfig(){
+    if (!configured){
+      showToast("Add your Supabase URL + anon key first (see the script comments).");
+      return false;
+    }
+    return true;
+  }
+
+  function genRoomCode(){
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
+    let out = "";
+    for (let i=0;i<5;i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  }
+
+  function saveSession(){
+    localStorage.setItem('between_session', JSON.stringify(session));
+  }
+  function loadSession(){
+    try{
+      const s = JSON.parse(localStorage.getItem('between_session'));
+      if (s && s.roomId && s.playerNum) session = s;
+    }catch(e){}
+  }
+  function clearSession(){
+    session = { roomId:null, roomCode:null, playerNum:null };
+    localStorage.removeItem('between_session');
+  }
+
+  // ---------- CREATE ----------
+  function openJoinScreen(){
+    if (!requireConfig()) return;
+    const params = new URLSearchParams(window.location.search);
+    const pre = params.get('room');
+    if (pre) document.getElementById('join-code').value = pre.toUpperCase();
+    goTo('screen-join');
+  }
+
+  async function handleCreate(){
+    if (!requireConfig()) return;
+    const name = document.getElementById('create-name').value.trim();
+    const secret = parseInt(document.getElementById('create-secret').value, 10);
+    const err = document.getElementById('create-error');
+    if (!name || isNaN(secret) || secret < 1 || secret > 100){
+      err.style.display = 'block';
+      return;
+    }
+    err.style.display = 'none';
+    const btn = document.getElementById('create-submit-btn');
+    btn.disabled = true; btn.textContent = "Creating…";
+
+    const roomCode = genRoomCode();
+    const { data, error } = await db.from('games').insert({
+      room_code: roomCode,
+      player1_name: name,
+      player1_secret: secret,
+      status: 'waiting'
+    }).select().single();
+
+    btn.disabled = false; btn.textContent = "Create room";
+
+    if (error || !data){
+      console.error(error);
+      showToast("Couldn't create the room. Check your Supabase config.");
+      return;
+    }
+
+    session = { roomId: data.id, roomCode: data.room_code, playerNum: 1 };
+    saveSession();
+    row = data;
+
+    document.getElementById('waiting-code').textContent = roomCode;
+    subscribeToRoom(data.id);
+    goTo('screen-waiting');
+  }
+
+  function copyCode(){
+    const code = document.getElementById('waiting-code').textContent;
+    navigator.clipboard?.writeText(code).then(() => showToast("Room code copied")).catch(() => showToast(code));
+  }
+
+  // ---------- JOIN ----------
+  async function handleJoin(){
+    if (!requireConfig()) return;
+    const code = document.getElementById('join-code').value.trim().toUpperCase();
+    const name = document.getElementById('join-name').value.trim();
+    const secret = parseInt(document.getElementById('join-secret').value, 10);
+    const err = document.getElementById('join-error');
+
+    if (!code || !name || isNaN(secret) || secret < 1 || secret > 100){
+      err.textContent = "Enter a room code, a name, and a number between 1 and 100.";
+      err.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('join-submit-btn');
+    btn.disabled = true; btn.textContent = "Joining…";
+
+    const { data: existing, error: findErr } = await db.from('games')
+      .select().eq('room_code', code).single();
+
+    if (findErr || !existing){
+      btn.disabled = false; btn.textContent = "Join room";
+      err.textContent = "No room found with that code.";
+      err.style.display = 'block';
+      return;
+    }
+
+    if (existing.status !== 'waiting'){
+      btn.disabled = false; btn.textContent = "Join room";
+      err.textContent = "That room is already full or finished.";
+      err.style.display = 'block';
+      return;
+    }
+
+    const { data: updated, error: updateErr } = await db.from('games')
+      .update({ player2_name: name, player2_secret: secret, status: 'active', turn: 1 })
+      .eq('id', existing.id).select().single();
+
+    btn.disabled = false; btn.textContent = "Join room";
+
+    if (updateErr || !updated){
+      err.textContent = "Couldn't join — someone else may have just joined.";
+      err.style.display = 'block';
+      return;
+    }
+
+    session = { roomId: updated.id, roomCode: updated.room_code, playerNum: 2 };
+    saveSession();
+    row = updated;
+    subscribeToRoom(updated.id);
+    renderGame();
+    goTo('screen-game');
+  }
+
+  // ---------- REALTIME ----------
+  function subscribeToRoom(id){
+    if (channel) db.removeChannel(channel);
+    channel = db.channel('games-' + id)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${id}` },
+        payload => { row = payload.new; onRowUpdate(); })
+      .subscribe();
+  }
+
+  function onRowUpdate(){
+    if (!row) return;
+    if (row.status === 'active' && document.getElementById('screen-waiting').classList.contains('active')){
+      renderGame();
+      goTo('screen-game');
+      showToast(otherName() + " joined — game on.");
+      return;
+    }
+    if (row.status === 'finished'){
+      renderWin();
+      goTo('screen-win');
+      return;
+    }
+    if (document.getElementById('screen-game').classList.contains('active')){
+      renderGame();
+    }
+  }
+
+  function myName(){ return session.playerNum === 1 ? row.player1_name : row.player2_name; }
+  function otherName(){ return session.playerNum === 1 ? row.player2_name : row.player1_name; }
+  function mySecret(){ return session.playerNum === 1 ? row.player1_secret : row.player2_secret; }
+  function myGuesses(){ return session.playerNum === 1 ? row.guesses1 : row.guesses2; }
+  function myRange(){ return session.playerNum === 1 ? row.range1 : row.range2; }
+
+  // ---------- GAME RENDER ----------
+  function renderGame(){
+    if (!row) return;
+    document.getElementById('game-room-code').textContent = row.room_code;
+    document.getElementById('game-players-label').textContent = myName() + " vs " + (otherName() || "—");
+    document.getElementById('your-number').textContent = mySecret();
+
+    const isMyTurn = row.turn === session.playerNum;
+    const banner = document.getElementById('turn-banner');
+    banner.className = 'turn-banner ' + (isMyTurn ? 'mine' : 'theirs');
+    document.getElementById('turn-banner-text').textContent = isMyTurn
+      ? "Your turn — guess " + otherName() + "'s number"
+      : "Waiting for " + otherName() + " to guess";
+
+    document.getElementById('guess-input').disabled = !isMyTurn;
+    document.getElementById('guess-submit-btn').disabled = !isMyTurn;
+    document.getElementById('guess-input').value = "";
+
+    const range = myRange();
+    document.getElementById('caliper-range-label').textContent =
+      "between " + range.low + " and " + range.high;
+
+    renderCaliper(range, myGuesses());
+    renderLedger(myGuesses());
+  }
+
+  function renderCaliper(range, guesses){
+    const el = document.getElementById('caliper');
+    el.innerHTML = '<div class="caliper-track"></div>';
+
+    const pct = v => Math.max(0, Math.min(100, (v/100)*100));
+
+    // zone highlight between bounds
+    const lowPct = pct(Math.max(range.low,0));
+    const highPct = pct(Math.min(range.high,101));
+    const zone = document.createElement('div');
+    zone.className = 'caliper-zone';
+    zone.style.left = lowPct + '%';
+    zone.style.width = Math.max(0, highPct - lowPct) + '%';
+    el.appendChild(zone);
+
+    // bound ticks (skip degenerate 0 / 101 placeholders)
+    if (range.low > 0){
+      const b = document.createElement('div');
+      b.className = 'caliper-bound';
+      b.style.left = pct(range.low) + '%';
+      b.innerHTML = '<span class="tick-label">' + range.low + '</span>';
+      el.appendChild(b);
+    }
+    if (range.high < 101){
+      const b = document.createElement('div');
+      b.className = 'caliper-bound';
+      b.style.left = pct(range.high) + '%';
+      b.innerHTML = '<span class="tick-label">' + range.high + '</span>';
+      el.appendChild(b);
+    }
+
+    guesses.forEach(g => {
+      const pin = document.createElement('div');
+      pin.className = 'caliper-pin ' + g.result;
+      pin.style.left = pct(g.guess) + '%';
+      pin.title = g.guess;
+      el.appendChild(pin);
+    });
+  }
+
+  function renderLedger(guesses){
+    const el = document.getElementById('ledger');
+    el.innerHTML = "";
+    if (!guesses.length){
+      el.innerHTML = '<div class="ledger-empty">No guesses yet.</div>';
+      return;
+    }
+    [...guesses].reverse().forEach(g => {
+      const r = document.createElement('div');
+      r.className = 'ledger-row';
+      const tag = g.result === 'up' ? '<span class="ledger-tag up">▲ higher</span>'
+                : g.result === 'down' ? '<span class="ledger-tag down">▼ lower</span>'
+                : '<span class="ledger-tag correct">✓ correct</span>';
+      r.innerHTML = '<span class="n mono">' + g.guess + '</span>' + tag;
+      el.appendChild(r);
+    });
+  }
+
+  function renderWin(){
+    const winnerName = row.winner === 1 ? row.player1_name : row.player2_name;
+    const loserName = row.winner === 1 ? row.player2_name : row.player1_name;
+    const secret = row.winner === 1 ? row.player2_secret : row.player1_secret;
+    const attempts = row.winner === 1 ? row.guesses1.length : row.guesses2.length;
+    document.getElementById('win-mark').textContent = winnerName + " wins";
+    document.getElementById('win-sub').textContent =
+      winnerName + " found " + loserName + "'s number (" + secret + ") in " + attempts + " " + (attempts === 1 ? "guess" : "guesses") + ".";
+  }
+
+  // ---------- GUESS SUBMIT ----------
+  async function submitGuess(){
+    const input = document.getElementById('guess-input');
+    const guess = parseInt(input.value, 10);
+    if (isNaN(guess) || guess < 1 || guess > 100){
+      input.style.borderColor = 'var(--bad)';
+      return;
+    }
+    input.style.borderColor = '';
+
+    const isP1 = session.playerNum === 1;
+    const targetSecret = isP1 ? row.player2_secret : row.player1_secret;
+    const rangeField = isP1 ? 'range1' : 'range2';
+    const guessesField = isP1 ? 'guesses1' : 'guesses2';
+    const range = { ...myRange() };
+
+    let result;
+    if (guess === targetSecret){
+      result = 'correct';
+    } else if (guess < targetSecret){
+      result = 'up';
+      if (guess > range.low) range.low = guess;
+    } else {
+      result = 'down';
+      if (guess < range.high) range.high = guess;
+    }
+
+    const newGuesses = [...myGuesses(), { guess, result }];
+    const updates = { [guessesField]: newGuesses, [rangeField]: range };
+
+    if (result === 'correct'){
+      updates.status = 'finished';
+      updates.winner = session.playerNum;
+    } else {
+      updates.turn = isP1 ? 2 : 1;
+    }
+
+    document.getElementById('guess-submit-btn').disabled = true;
+    const { data, error } = await db.from('games').update(updates).eq('id', row.id).select().single();
+    if (error){
+      showToast("Couldn't submit — check your connection.");
+      document.getElementById('guess-submit-btn').disabled = false;
+      return;
+    }
+    row = data;
+    onRowUpdate();
+  }
+
+  // ---------- RESTART / LEAVE ----------
+  function leaveRoom(){
+    if (channel) db.removeChannel(channel);
+    clearSession();
+    row = null;
+    document.getElementById('create-name').value = "";
+    document.getElementById('create-secret').value = "";
+    document.getElementById('join-code').value = "";
+    document.getElementById('join-name').value = "";
+    document.getElementById('join-secret').value = "";
+    goTo('screen-landing');
+  }
+
+  function fullRestart(){ leaveRoom(); }
+
+  // ---------- RESUME ON REFRESH ----------
+  async function tryResume(){
+    if (!configured) return;
+    loadSession();
+    if (!session.roomId) return;
+    const { data, error } = await db.from('games').select().eq('id', session.roomId).single();
+    if (error || !data){ clearSession(); return; }
+    row = data;
+    subscribeToRoom(data.id);
+    if (data.status === 'finished'){ renderWin(); goTo('screen-win'); }
+    else if (data.status === 'waiting'){
+      document.getElementById('waiting-code').textContent = data.room_code;
+      goTo('screen-waiting');
+    } else {
+      renderGame();
+      goTo('screen-game');
+    }
+  }
+
+  document.getElementById('guess-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitGuess(); });
+  document.getElementById('create-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleCreate(); });
+  document.getElementById('join-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleJoin(); });
+
+  tryResume();
+</script>
+</body>
+</html>
