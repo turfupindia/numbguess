@@ -241,6 +241,10 @@
   .ledger-empty{ color:var(--text-faint); font-size:0.82rem; padding:10px 1px; }
 
   /* ---------- Win screen ---------- */
+  .win-icon{ min-height:52px; margin-bottom:10px; }
+  .win-icon svg{ animation:popIn .3s ease; }
+  @keyframes popIn{ from{ opacity:0; transform:scale(0.85); } to{ opacity:1; transform:scale(1); } }
+  @media (prefers-reduced-motion: reduce){ .win-icon svg{ animation:none; } }
   .win-mark{ font-family:'Space Grotesk',sans-serif; font-size:1.9rem; font-weight:700; margin-bottom:6px; }
   .win-sub{ color:var(--text-dim); margin-bottom:24px; line-height:1.5; }
 
@@ -260,7 +264,7 @@
 
   <!-- LANDING -->
   <div class="screen active" id="screen-landing">
-    <div class="eyebrow">Two players · one number each · Made by Areeb</div>
+    <div class="eyebrow">Two players · one number each</div>
     <h1 class="title">Between</h1>
     <p class="lede">Each of you locks in a secret number from 1–100. Take turns guessing the other's — every guess narrows the range, and you have 30 seconds per turn.</p>
     <div class="stack">
@@ -380,10 +384,11 @@
   <!-- WIN -->
   <div class="screen" id="screen-win">
     <div class="eyebrow">Game over</div>
+    <div class="win-icon" id="win-icon"></div>
     <div class="win-mark" id="win-mark">— wins</div>
     <p class="win-sub" id="win-sub"></p>
     <div class="stack">
-      <button class="btn" onclick="fullRestart()">Start a new room</button>
+      <button class="btn" onclick="fullRestart()">Back to home</button>
     </div>
   </div>
 
@@ -603,11 +608,15 @@
   }
 
   // ---------- REALTIME ----------
+  let finishedCleanupScheduled = false;
+
   function subscribeToRoom(id){
     if (channel) db.removeChannel(channel);
     channel = db.channel('games-' + id)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${id}` },
         payload => { row = payload.new; onRowUpdate(); })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'games', filter: `id=eq.${id}` },
+        () => { handleRoomDeleted(); })
       .subscribe();
   }
 
@@ -622,11 +631,37 @@
     if (row.status === 'finished'){
       renderWin();
       goTo('screen-win');
+      scheduleFinishedCleanup();
       return;
     }
     if (document.getElementById('screen-game').classList.contains('active')){
       renderGame();
     }
+  }
+
+  // Once a game finishes, clear the room from the database a few seconds
+  // later so both players have time to see the result first.
+  function scheduleFinishedCleanup(){
+    if (finishedCleanupScheduled || !row) return;
+    finishedCleanupScheduled = true;
+    const idToDelete = row.id;
+    setTimeout(() => {
+      if (configured) db.from('games').delete().eq('id', idToDelete);
+    }, 4000);
+  }
+
+  // Fires when the room row is deleted — either because it just finished
+  // and got cleaned up, or because the other player left.
+  function handleRoomDeleted(){
+    const onWinScreen = document.getElementById('screen-win').classList.contains('active');
+    const onLanding = document.getElementById('screen-landing').classList.contains('active');
+    if (onWinScreen || onLanding) return; // expected cleanup, nothing to alert
+    const leftName = row ? otherName() : null;
+    showToast((leftName || "Your opponent") + " left — room closed.");
+    if (channel){ db.removeChannel(channel); channel = null; }
+    clearSession();
+    row = null;
+    goTo('screen-landing');
   }
 
   function myName(){ return session.playerNum === 1 ? row.player1_name : row.player2_name; }
@@ -720,14 +755,28 @@
     });
   }
 
+  const WIN_CHECK_SVG = '<svg viewBox="0 0 64 64" width="52" height="52"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--good)" stroke-width="3"/><path d="M20 33 L28 41 L45 22" fill="none" stroke="var(--good)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   function renderWin(){
+    const iAmWinner = row.winner === session.playerNum;
     const winnerName = row.winner === 1 ? row.player1_name : row.player2_name;
-    const loserName = row.winner === 1 ? row.player2_name : row.player1_name;
-    const secret = row.winner === 1 ? row.player2_secret : row.player1_secret;
     const attempts = row.winner === 1 ? row.guesses1.length : row.guesses2.length;
-    document.getElementById('win-mark').textContent = winnerName + " wins";
-    document.getElementById('win-sub').textContent =
-      winnerName + " found " + loserName + "'s number (" + secret + ") in " + attempts + " " + (attempts === 1 ? "guess" : "guesses") + ".";
+    const foundSecret = row.winner === 1 ? row.player2_secret : row.player1_secret;
+    const tries = attempts + " " + (attempts === 1 ? "guess" : "guesses");
+
+    const iconEl = document.getElementById('win-icon');
+    const markEl = document.getElementById('win-mark');
+    const subEl = document.getElementById('win-sub');
+
+    if (iAmWinner){
+      iconEl.innerHTML = WIN_CHECK_SVG;
+      markEl.textContent = "Congratulations — you win";
+      subEl.textContent = "You found " + otherName() + "'s number (" + foundSecret + ") in " + tries + ".";
+    } else {
+      iconEl.innerHTML = "";
+      markEl.textContent = winnerName + " wins";
+      subEl.textContent = winnerName + " found your number (" + mySecret() + ") in " + tries + ". Better luck next time.";
+    }
   }
 
   // ---------- TIMER ----------
@@ -826,17 +875,24 @@
   }
 
   // ---------- RESTART / LEAVE ----------
-  function leaveRoom(){
-    if (channel) db.removeChannel(channel);
+  async function leaveRoom(){
+    const idToDelete = session.roomId;
+    if (channel){ db.removeChannel(channel); channel = null; }
     clearSession();
     row = null;
     lastAutoHandledTurnStart = null;
+    finishedCleanupScheduled = false;
     document.getElementById('create-name').value = "";
     document.getElementById('create-secret').value = "";
     document.getElementById('join-code').value = "";
     document.getElementById('join-name').value = "";
     document.getElementById('join-secret').value = "";
     goTo('screen-landing');
+    // Best-effort: remove the room so the other player isn't left in limbo
+    // and it doesn't linger in the database. Harmless if it's already gone.
+    if (configured && idToDelete){
+      await db.from('games').delete().eq('id', idToDelete);
+    }
   }
   function fullRestart(){ leaveRoom(); }
 
@@ -849,7 +905,7 @@
     if (error || !data){ clearSession(); return; }
     row = data;
     subscribeToRoom(data.id);
-    if (data.status === 'finished'){ renderWin(); goTo('screen-win'); }
+    if (data.status === 'finished'){ renderWin(); goTo('screen-win'); scheduleFinishedCleanup(); }
     else if (data.status === 'waiting'){
       document.getElementById('waiting-code').textContent = data.room_code;
       goTo('screen-waiting');
