@@ -10,23 +10,23 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --ink:        #0f1216;
-    --surface:    #171b21;
-    --surface-2:  #1e232b;
-    --line:       #2a3038;
-    --text:       #e9ebee;
-    --text-dim:   #9198a3;
-    --text-faint: #5b6270;
-    --signal:     #e3a542;   /* you / player 1 */
-    --signal-dim: #4a3d24;
-    --other:      #4fb8ac;   /* opponent / player 2 */
-    --other-dim:  #1f3b38;
-    --good:       #6bcf8f;
-    --good-dim:   #1c3a29;
-    --bad:        #d9705d;
-    --radius-lg: 18px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
+    --ink:        #0e1013;
+    --surface:    #16191e;
+    --surface-2:  #1c2027;
+    --line:       #262b33;
+    --text:       #e7e9ec;
+    --text-dim:   #8d93a0;
+    --text-faint: #565c68;
+    --signal:     #d99a4e;   /* you / player 1 */
+    --signal-dim: #3a2f1e;
+    --other:      #4fa89f;   /* opponent / player 2 */
+    --other-dim:  #1a2f2c;
+    --good:       #5fb87f;
+    --good-dim:   #16281d;
+    --bad:        #c9695a;
+    --radius-lg: 10px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
   }
 
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -43,273 +43,214 @@
     font-family:'Space Grotesk', 'Inter', sans-serif;
     letter-spacing:-0.01em;
   }
-
   .mono{ font-family:'IBM Plex Mono', monospace; }
 
-  :focus-visible{
-    outline: 2px solid var(--signal);
-    outline-offset: 2px;
-  }
+  :focus-visible{ outline: 2px solid var(--signal); outline-offset: 2px; }
 
   #app{
     min-height:100vh;
-    max-width:460px;
+    max-width:440px;
     margin:0 auto;
-    padding: 22px 18px 36px;
+    padding: 20px 18px 32px;
     display:flex;
     flex-direction:column;
   }
 
-  .screen{ display:none; flex-direction:column; flex:1; animation:rise .3s ease; }
+  .screen{ display:none; flex-direction:column; flex:1; animation:rise .25s ease; }
   .screen.active{ display:flex; }
   @media (prefers-reduced-motion: reduce){ .screen{ animation:none; } }
-  @keyframes rise{
-    from{ opacity:0; transform:translateY(6px); }
-    to{ opacity:1; transform:translateY(0); }
-  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:translateY(0); } }
 
-  /* ---------- Typography blocks ---------- */
   .eyebrow{
     font-family:'IBM Plex Mono', monospace;
-    font-size:0.72rem;
-    letter-spacing:0.14em;
-    text-transform:uppercase;
-    color:var(--text-faint);
-    margin-bottom:10px;
+    font-size:0.68rem; letter-spacing:0.13em; text-transform:uppercase;
+    color:var(--text-faint); margin-bottom:8px;
   }
-  h1.title{ font-size:1.9rem; font-weight:700; margin:0 0 6px; color:var(--text); }
-  .lede{ color:var(--text-dim); font-size:0.95rem; line-height:1.55; margin:0 0 28px; }
+  h1.title{ font-size:1.7rem; font-weight:700; margin:0 0 6px; color:var(--text); }
+  .lede{ color:var(--text-dim); font-size:0.92rem; line-height:1.55; margin:0 0 24px; }
 
   /* ---------- Buttons ---------- */
   .btn{
     appearance:none; border:none; cursor:pointer;
-    width:100%;
-    padding:15px 18px;
+    width:100%; padding:14px 18px;
     border-radius:var(--radius-md);
     font-family:'Space Grotesk', sans-serif;
-    font-size:1rem; font-weight:600;
+    font-size:0.98rem; font-weight:600;
     color:var(--ink);
     background:var(--signal);
-    transition:transform .1s ease, opacity .1s ease;
+    transition:filter .1s ease, opacity .1s ease;
   }
-  .btn:active{ transform:scale(0.98); }
-  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
-  .btn.ghost{
-    background:transparent;
-    color:var(--text);
-    border:1px solid var(--line);
-  }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn:active{ filter:brightness(0.94); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; filter:none; }
+  .btn.ghost{ background:transparent; color:var(--text); border:1px solid var(--line); }
   .btn.other{ background:var(--other); }
-  .btn-row{ display:flex; gap:10px; }
-  .btn-row .btn{ width:auto; flex:1; }
-
-  .stack{ display:flex; flex-direction:column; gap:12px; }
+  .stack{ display:flex; flex-direction:column; gap:10px; }
   .spacer{ flex:1; }
 
-  /* ---------- Inputs ---------- */
+  /* ---------- Text inputs (name / room code) ---------- */
   label.field-label{
-    display:block;
-    font-size:0.78rem;
-    color:var(--text-faint);
-    margin:0 0 7px 2px;
-    font-family:'IBM Plex Mono', monospace;
-    letter-spacing:0.03em;
-    text-transform:uppercase;
+    display:block; font-size:0.74rem; color:var(--text-faint);
+    margin:0 0 6px 1px; font-family:'IBM Plex Mono', monospace;
+    letter-spacing:0.04em; text-transform:uppercase;
   }
-  input[type=text], input[type=number]{
-    width:100%;
-    background:var(--surface);
-    border:1px solid var(--line);
-    color:var(--text);
-    border-radius:var(--radius-sm);
-    padding:14px 14px;
-    font-size:1rem;
-    font-family:'IBM Plex Mono', monospace;
-    outline:none;
-    margin-bottom:16px;
+  input[type=text]{
+    width:100%; background:var(--surface); border:1px solid var(--line);
+    color:var(--text); border-radius:var(--radius-sm);
+    padding:13px 14px; font-size:0.98rem; font-family:'IBM Plex Mono', monospace;
+    outline:none; margin-bottom:16px;
   }
-  input:focus{ border-color:var(--signal); }
-  input[type=number]{ text-align:center; font-size:1.3rem; }
-  input::placeholder{ color:var(--text-faint); font-family:'Inter',sans-serif; }
-  .error-text{
-    color:var(--bad); font-size:0.82rem; margin:-8px 0 14px 2px; display:none;
+  input[type=text]:focus{ border-color:var(--signal); }
+  input::placeholder{ color:var(--text-faint); }
+  .error-text{ color:var(--bad); font-size:0.8rem; margin:-9px 0 14px 1px; display:none; }
+
+  /* ---------- Number stepper (secret number, guess) ---------- */
+  .stepper{
+    display:flex; align-items:stretch;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-md); overflow:hidden; margin-bottom:16px;
   }
+  .stepper.compact{ margin-bottom:0; }
+  .step-btn{
+    background:transparent; border:none; color:var(--text-dim);
+    width:42px; font-size:1.15rem; cursor:pointer; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step-btn:hover{ background:var(--surface-2); color:var(--text); }
+  .step-btn:active{ background:var(--line); }
+  .step-input{
+    flex:1; min-width:0; border:none; background:transparent;
+    text-align:center; font-family:'IBM Plex Mono', monospace;
+    font-size:1.35rem; font-weight:600; color:var(--text);
+    padding:12px 4px; -moz-appearance:textfield; outline:none;
+  }
+  .step-input::-webkit-outer-spin-button,
+  .step-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .step-input::placeholder{ color:var(--text-faint); font-family:'Inter',sans-serif; font-size:1rem; font-weight:400; }
 
   /* ---------- Cards ---------- */
   .card{
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:var(--radius-lg);
-    padding:20px;
-    margin-bottom:16px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-lg); padding:18px; margin-bottom:14px;
   }
 
   /* ---------- Room code ---------- */
   .code-display{
     display:flex; align-items:center; justify-content:center; gap:14px;
-    background:var(--surface-2);
-    border:1px dashed var(--line);
-    border-radius:var(--radius-md);
-    padding:20px;
-    margin-bottom:16px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-md); padding:18px; margin-bottom:16px;
   }
   .code-display .code{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:2rem; font-weight:600;
-    letter-spacing:0.18em;
-    color:var(--signal);
+    font-family:'IBM Plex Mono', monospace; font-size:1.9rem; font-weight:600;
+    letter-spacing:0.16em; color:var(--signal);
   }
   .copy-btn{
-    background:var(--surface);
-    border:1px solid var(--line);
-    color:var(--text-dim);
-    border-radius:var(--radius-sm);
-    padding:8px 12px;
-    font-size:0.78rem;
-    font-family:'IBM Plex Mono',monospace;
-    cursor:pointer;
+    background:var(--surface-2); border:1px solid var(--line); color:var(--text-dim);
+    border-radius:var(--radius-sm); padding:7px 12px; font-size:0.76rem;
+    font-family:'IBM Plex Mono',monospace; cursor:pointer;
   }
-  .copy-btn:active{ transform:scale(0.96); }
+  .copy-btn:hover{ color:var(--text); }
 
-  .pulse-row{ display:flex; align-items:center; justify-content:center; gap:10px; color:var(--text-dim); font-size:0.88rem; margin-bottom:6px;}
-  .pulse-dot{
-    width:8px; height:8px; border-radius:50%;
-    background:var(--signal);
-    animation:pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse{ 0%,100%{opacity:0.25;} 50%{opacity:1;} }
+  .pulse-row{ display:flex; align-items:center; justify-content:center; gap:9px; color:var(--text-dim); font-size:0.86rem; margin-bottom:6px;}
+  .pulse-dot{ width:7px; height:7px; border-radius:50%; background:var(--signal); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:0.3;} 50%{opacity:1;} }
   @media (prefers-reduced-motion: reduce){ .pulse-dot{ animation:none; opacity:0.8; } }
 
   /* ---------- Game header ---------- */
-  .game-header{
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:18px;
-  }
-  .room-chip{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.72rem;
-    color:var(--text-faint);
-    letter-spacing:0.08em;
-  }
-  .conn-dot{
-    display:inline-block; width:6px; height:6px; border-radius:50%;
-    background:var(--good); margin-right:6px; vertical-align:1px;
-  }
+  .game-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .room-chip{ font-family:'IBM Plex Mono', monospace; font-size:0.7rem; color:var(--text-faint); letter-spacing:0.06em; }
+  .conn-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--good); margin-right:6px; vertical-align:1px; }
 
+  /* ---------- Turn banner + timer ---------- */
   .turn-banner{
-    border-radius:var(--radius-md);
-    padding:14px 16px;
-    margin-bottom:16px;
-    font-family:'Space Grotesk', sans-serif;
-    font-weight:600;
-    font-size:1.05rem;
-    display:flex; align-items:center; justify-content:space-between;
+    border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
   }
-  .turn-banner.mine{ background:var(--signal-dim); color:var(--signal); border:1px solid var(--signal); }
-  .turn-banner.theirs{ background:var(--surface); color:var(--text-dim); border:1px solid var(--line); }
+  .turn-banner.mine{ background:var(--signal-dim); border:1px solid #5a4830; }
+  .turn-banner.theirs{ background:var(--surface); border:1px solid var(--line); }
+  .turn-banner-text{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:0.98rem; }
+  .turn-banner.mine .turn-banner-text{ color:var(--signal); }
+  .turn-banner.theirs .turn-banner-text{ color:var(--text-dim); }
+
+  .timer-wrap{ position:relative; width:38px; height:38px; flex-shrink:0; }
+  .timer-wrap svg{ width:38px; height:38px; transform:rotate(-90deg); }
+  .timer-track{ fill:none; stroke:var(--line); stroke-width:3; }
+  .timer-progress{
+    fill:none; stroke:var(--signal); stroke-width:3; stroke-linecap:round;
+    stroke-dasharray:113.097; stroke-dashoffset:0;
+    transition:stroke-dashoffset .25s linear, stroke .2s ease;
+  }
+  .turn-banner.theirs .timer-progress{ stroke:var(--other); }
+  .timer-progress.warn{ stroke:var(--bad) !important; }
+  .timer-text{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:0.72rem; font-weight:600; color:var(--text);
+  }
 
   .your-number-row{
     display:flex; align-items:center; justify-content:space-between;
     background:var(--surface); border:1px solid var(--line);
-    border-radius:var(--radius-md);
-    padding:12px 16px;
-    margin-bottom:18px;
+    border-radius:var(--radius-md); padding:11px 15px; margin-bottom:16px;
   }
-  .your-number-row .lbl{ font-size:0.85rem; color:var(--text-dim); }
-  .your-number-row .num{ font-family:'IBM Plex Mono',monospace; font-size:1.25rem; font-weight:600; color:var(--text); }
+  .your-number-row .lbl{ font-size:0.84rem; color:var(--text-dim); }
+  .your-number-row .num{ font-family:'IBM Plex Mono',monospace; font-size:1.2rem; font-weight:600; color:var(--text); }
 
   /* ---------- Caliper / range visualization ---------- */
-  .caliper-wrap{ margin-bottom:22px; }
+  .caliper-wrap{ margin-bottom:20px; }
   .caliper-labels{
-    display:flex; justify-content:space-between;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.72rem;
-    color:var(--text-faint);
-    margin-bottom:8px;
+    display:flex; justify-content:space-between; font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem; color:var(--text-faint); margin-bottom:7px;
   }
-  .caliper{
-    position:relative;
-    height:54px;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:var(--radius-sm);
-  }
-  .caliper-track{
-    position:absolute; top:50%; left:8px; right:8px; height:2px;
-    background:var(--line); transform:translateY(-50%);
-  }
-  .caliper-zone{
-    position:absolute; top:50%; height:6px;
-    background:var(--signal);
-    opacity:0.35;
-    border-radius:4px;
-    transform:translateY(-50%);
-  }
-  .caliper-pin{
-    position:absolute; top:50%;
-    transform:translate(-50%,-50%);
-    width:9px; height:9px; border-radius:50%;
-    border:2px solid var(--ink);
-  }
+  .caliper{ position:relative; height:50px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); }
+  .caliper-track{ position:absolute; top:50%; left:8px; right:8px; height:1px; background:var(--line); transform:translateY(-50%); }
+  .caliper-zone{ position:absolute; top:50%; height:4px; background:var(--signal); opacity:0.4; border-radius:3px; transform:translateY(-50%); }
+  .caliper-pin{ position:absolute; top:50%; transform:translate(-50%,-50%); width:8px; height:8px; border-radius:50%; border:2px solid var(--ink); }
   .caliper-pin.up{ background:var(--signal); }
   .caliper-pin.down{ background:var(--other); }
-  .caliper-pin.correct{ background:var(--good); width:12px; height:12px; }
-  .caliper-bound{
-    position:absolute; top:4px; bottom:4px; width:2px;
-    background:var(--text-dim);
-  }
+  .caliper-pin.correct{ background:var(--good); width:11px; height:11px; }
+  .caliper-bound{ position:absolute; top:5px; bottom:5px; width:1px; background:var(--text-dim); }
   .caliper-bound .tick-label{
-    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
-    font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-dim);
-    white-space:nowrap;
+    position:absolute; top:-17px; left:50%; transform:translateX(-50%);
+    font-family:'IBM Plex Mono',monospace; font-size:0.66rem; color:var(--text-dim); white-space:nowrap;
   }
 
   /* ---------- Guess input ---------- */
-  .guess-row{ display:flex; gap:10px; margin-bottom:22px; }
-  .guess-row input{ margin-bottom:0; flex:1; }
-  .guess-row .btn{ width:auto; padding:0 22px; }
+  .guess-row{ display:flex; gap:10px; margin-bottom:20px; align-items:stretch; }
+  .guess-row .stepper{ flex:1; margin-bottom:0; }
+  .guess-row .btn{ width:auto; padding:0 20px; }
 
-  /* ---------- Ledger ---------- */
+  /* ---------- Ledgers ---------- */
+  .ledger-block{ margin-bottom:18px; }
   .ledger-title{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase;
-    color:var(--text-faint); margin:0 0 10px 2px;
+    font-family:'IBM Plex Mono', monospace; font-size:0.7rem; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--text-faint); margin:0 0 9px 1px;
+    display:flex; align-items:center; gap:7px;
   }
-  .ledger{ display:flex; flex-direction:column; gap:6px; max-height:210px; overflow-y:auto; }
+  .ledger-title .dot{ width:5px; height:5px; border-radius:50%; }
+  .ledger{ display:flex; flex-direction:column; gap:5px; max-height:150px; overflow-y:auto; }
   .ledger-row{
     display:flex; align-items:center; justify-content:space-between;
     background:var(--surface); border:1px solid var(--line);
-    border-radius:var(--radius-sm);
-    padding:10px 14px;
+    border-radius:var(--radius-sm); padding:9px 13px;
   }
-  .ledger-row .n{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; }
-  .ledger-tag{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:0.78rem; font-weight:500;
-    padding:3px 10px; border-radius:20px;
-  }
+  .ledger-row .n{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:0.95rem; }
+  .ledger-tag{ font-family:'IBM Plex Mono',monospace; font-size:0.74rem; font-weight:500; padding:2px 9px; border-radius:20px; }
   .ledger-tag.up{ color:var(--signal); background:var(--signal-dim); }
   .ledger-tag.down{ color:var(--other); background:var(--other-dim); }
   .ledger-tag.correct{ color:var(--good); background:var(--good-dim); }
-  .ledger-empty{ color:var(--text-faint); font-size:0.85rem; padding:12px 2px; }
+  .ledger-empty{ color:var(--text-faint); font-size:0.82rem; padding:10px 1px; }
 
   /* ---------- Win screen ---------- */
-  .win-mark{ font-family:'Space Grotesk',sans-serif; font-size:2.1rem; font-weight:700; margin-bottom:6px; }
-  .win-sub{ color:var(--text-dim); margin-bottom:26px; line-height:1.5; }
+  .win-mark{ font-family:'Space Grotesk',sans-serif; font-size:1.9rem; font-weight:700; margin-bottom:6px; }
+  .win-sub{ color:var(--text-dim); margin-bottom:24px; line-height:1.5; }
 
-  .footnote{
-    margin-top:auto; padding-top:26px;
-    text-align:center; color:var(--text-faint); font-size:0.72rem;
-    font-family:'IBM Plex Mono', monospace;
-  }
+  .footnote{ margin-top:auto; padding-top:22px; text-align:center; color:var(--text-faint); font-size:0.7rem; font-family:'IBM Plex Mono', monospace; }
 
   .toast{
-    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
-    background:var(--surface-2); border:1px solid var(--line);
-    color:var(--text); padding:10px 18px; border-radius:var(--radius-sm);
-    font-size:0.85rem; opacity:0; pointer-events:none;
-    transition:opacity .2s ease;
-    z-index:50;
+    position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+    background:var(--surface-2); border:1px solid var(--line); color:var(--text);
+    padding:10px 18px; border-radius:var(--radius-sm); font-size:0.84rem;
+    opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:50; max-width:90vw; text-align:center;
   }
   .toast.show{ opacity:1; }
 </style>
@@ -321,7 +262,7 @@
   <div class="screen active" id="screen-landing">
     <div class="eyebrow">Two players · one number each</div>
     <h1 class="title">Between</h1>
-    <p class="lede">Each of you locks in a secret number from 1–100. Take turns guessing the other's — every guess narrows the range until someone lands on it exactly.</p>
+    <p class="lede">Each of you locks in a secret number from 1–100. Take turns guessing the other's — every guess narrows the range, and you have 30 seconds per turn.</p>
     <div class="stack">
       <button class="btn" onclick="goTo('screen-create')">Create a room</button>
       <button class="btn ghost" onclick="openJoinScreen()">Join a room</button>
@@ -337,9 +278,13 @@
     <label class="field-label" for="create-name">Your name</label>
     <input type="text" id="create-name" placeholder="e.g. Aree" maxlength="16">
     <label class="field-label" for="create-secret">Your secret number (1–100)</label>
-    <input type="number" id="create-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+    <div class="stepper">
+      <button type="button" class="step-btn" data-target="create-secret" data-step="-1" aria-label="Decrease">−</button>
+      <input type="number" class="step-input" id="create-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+      <button type="button" class="step-btn" data-target="create-secret" data-step="1" aria-label="Increase">+</button>
+    </div>
     <div class="error-text" id="create-error">Enter a name and a number between 1 and 100.</div>
-    <div class="stack">
+    <div class="stack" style="margin-top:8px;">
       <button class="btn" id="create-submit-btn" onclick="handleCreate()">Create room</button>
       <button class="btn ghost" onclick="goTo('screen-landing')">Back</button>
     </div>
@@ -365,13 +310,17 @@
     <h1 class="title">Join a room</h1>
     <p class="lede">Enter the code your friend sent you, then lock in your own secret number.</p>
     <label class="field-label" for="join-code">Room code</label>
-    <input type="text" id="join-code" placeholder="e.g. K7QX2" maxlength="6" style="text-transform:uppercase; letter-spacing:0.15em; font-size:1.2rem;">
+    <input type="text" id="join-code" placeholder="e.g. K7QX2" maxlength="6" style="text-transform:uppercase; letter-spacing:0.15em; font-size:1.1rem;">
     <label class="field-label" for="join-name">Your name</label>
     <input type="text" id="join-name" placeholder="e.g. Sam" maxlength="16">
     <label class="field-label" for="join-secret">Your secret number (1–100)</label>
-    <input type="number" id="join-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+    <div class="stepper">
+      <button type="button" class="step-btn" data-target="join-secret" data-step="-1" aria-label="Decrease">−</button>
+      <input type="number" class="step-input" id="join-secret" min="1" max="100" inputmode="numeric" placeholder="—">
+      <button type="button" class="step-btn" data-target="join-secret" data-step="1" aria-label="Increase">+</button>
+    </div>
     <div class="error-text" id="join-error">Check the details and try again.</div>
-    <div class="stack">
+    <div class="stack" style="margin-top:8px;">
       <button class="btn other" id="join-submit-btn" onclick="handleJoin()">Join room</button>
       <button class="btn ghost" onclick="goTo('screen-landing')">Back</button>
     </div>
@@ -385,7 +334,14 @@
     </div>
 
     <div class="turn-banner" id="turn-banner">
-      <span id="turn-banner-text">—</span>
+      <span class="turn-banner-text" id="turn-banner-text">—</span>
+      <div class="timer-wrap" id="timer-wrap">
+        <svg viewBox="0 0 40 40">
+          <circle class="timer-track" cx="20" cy="20" r="18"></circle>
+          <circle class="timer-progress" id="timer-circle" cx="20" cy="20" r="18"></circle>
+        </svg>
+        <span class="timer-text" id="timer-text">30</span>
+      </div>
     </div>
 
     <div class="your-number-row">
@@ -399,15 +355,26 @@
     </div>
 
     <div class="guess-row">
-      <input type="number" id="guess-input" min="1" max="100" inputmode="numeric" placeholder="Your guess">
+      <div class="stepper compact">
+        <button type="button" class="step-btn" data-target="guess-input" data-step="-1" aria-label="Decrease">−</button>
+        <input type="number" class="step-input" id="guess-input" min="1" max="100" inputmode="numeric" placeholder="—">
+        <button type="button" class="step-btn" data-target="guess-input" data-step="1" aria-label="Increase">+</button>
+      </div>
       <button class="btn" id="guess-submit-btn" onclick="submitGuess()">Guess</button>
     </div>
 
-    <div class="ledger-title">Your guesses at their number</div>
-    <div class="ledger" id="ledger"></div>
+    <div class="ledger-block">
+      <div class="ledger-title"><span class="dot" style="background:var(--signal);"></span>Your guesses at their number</div>
+      <div class="ledger" id="ledger-mine"></div>
+    </div>
+
+    <div class="ledger-block">
+      <div class="ledger-title"><span class="dot" style="background:var(--other);"></span><span id="opponent-ledger-title">Their guesses at your number</span></div>
+      <div class="ledger" id="ledger-theirs"></div>
+    </div>
 
     <div class="spacer"></div>
-    <button class="btn ghost" onclick="leaveRoom()" style="margin-top:16px;">Leave game</button>
+    <button class="btn ghost" onclick="leaveRoom()" style="margin-top:8px;">Leave game</button>
   </div>
 
   <!-- WIN -->
@@ -427,27 +394,24 @@
 
 <script>
 /* ======================================================================
-   SUPABASE CONFIG — required before this works across two devices.
+   SUPABASE CONFIG
 
    1. Create a free project at https://supabase.com
-   2. Open SQL Editor and run the contents of schema.sql (shipped alongside
-      this file) — it creates the `games` table, an open access policy,
-      and turns on realtime for the table.
-   3. Go to Project Settings > API and copy:
-        - "Project URL"        -> paste below as SUPABASE_URL
-        - "anon public" key    -> paste below as SUPABASE_ANON_KEY
-   4. Save this file and host it (e.g. GitHub Pages). Both players open
-      the same URL.
+   2. Run schema.sql in the SQL Editor (creates the `games` table, an
+      open access policy, and turns on realtime).
+   3. Project Settings > API Keys -> copy the Publishable key (or legacy
+      anon key) and the Project URL (WITHOUT the /rest/v1/ suffix).
+   4. Paste them below, save, and host this file (e.g. GitHub Pages).
 
-   Note: the anon key is meant to be public/client-side — that's normal
-   for Supabase. The open access policy in schema.sql means anyone who
-   has your project URL and anon key could read/write this table
-   directly (there's no login system here). That's a reasonable
-   trade-off for a casual game between friends; it is not meant for
-   anything sensitive.
+   Note: the publishable/anon key is meant to be public client-side, and
+   the access policy in schema.sql is wide open (no login system) — fine
+   for a casual game between friends, not meant for anything sensitive.
    ====================================================================== */
   const SUPABASE_URL = "https://dumylrakwqoiyjeuupml.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_p235lIFzwxNbvsj0Bf71tA_H5zAaEPG";
+
+  const TURN_SECONDS = 30;
+  const TIMER_CIRCUMFERENCE = 113.097; // 2 * pi * r(18)
 
   let db = null;
   const configured = SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY.length > 20;
@@ -458,20 +422,17 @@
   }
 
   // ---------- session state ----------
-  let session = {
-    roomId: null,
-    roomCode: null,
-    playerNum: null, // 1 or 2
-  };
-  let row = null;       // latest games row
+  let session = { roomId:null, roomCode:null, playerNum:null };
+  let row = null;
   let channel = null;
+  let lastAutoHandledTurnStart = null;
 
   function showToast(msg){
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(showToast._h);
-    showToast._h = setTimeout(() => t.classList.remove('show'), 2200);
+    showToast._h = setTimeout(() => t.classList.remove('show'), 2400);
   }
 
   function goTo(id){
@@ -480,23 +441,44 @@
   }
 
   function requireConfig(){
-    if (!configured){
-      showToast("Add your Supabase URL + anon key first (see the script comments).");
-      return false;
-    }
+    if (!configured){ showToast("Add your Supabase URL + key first (see the script comments)."); return false; }
     return true;
   }
 
   function genRoomCode(){
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let out = "";
     for (let i=0;i<5;i++) out += chars[Math.floor(Math.random()*chars.length)];
     return out;
   }
 
-  function saveSession(){
-    localStorage.setItem('between_session', JSON.stringify(session));
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+  // ---------- number steppers (shared by secret + guess inputs) ----------
+  function wireSteppers(){
+    document.querySelectorAll('.step-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        const step = parseInt(btn.dataset.step, 10);
+        let v = parseInt(input.value, 10);
+        if (isNaN(v)) v = step > 0 ? 1 : 100;
+        else v = clamp(v + step, 1, 100);
+        input.value = v;
+      });
+    });
+    document.querySelectorAll('.step-input').forEach(input => {
+      input.addEventListener('input', () => {
+        if (input.value === '') return;
+        let v = parseInt(input.value, 10);
+        if (isNaN(v)) return;
+        const clamped = clamp(v, 1, 100);
+        if (clamped !== v) input.value = clamped;
+      });
+    });
   }
+  wireSteppers();
+
+  function saveSession(){ localStorage.setItem('between_session', JSON.stringify(session)); }
   function loadSession(){
     try{
       const s = JSON.parse(localStorage.getItem('between_session'));
@@ -595,7 +577,13 @@
     }
 
     const { data: updated, error: updateErr } = await db.from('games')
-      .update({ player2_name: name, player2_secret: secret, status: 'active', turn: 1 })
+      .update({
+        player2_name: name,
+        player2_secret: secret,
+        status: 'active',
+        turn: 1,
+        turn_started_at: new Date().toISOString()
+      })
       .eq('id', existing.id).select().single();
 
     btn.disabled = false; btn.textContent = "Join room";
@@ -645,6 +633,7 @@
   function otherName(){ return session.playerNum === 1 ? row.player2_name : row.player1_name; }
   function mySecret(){ return session.playerNum === 1 ? row.player1_secret : row.player2_secret; }
   function myGuesses(){ return session.playerNum === 1 ? row.guesses1 : row.guesses2; }
+  function opponentGuesses(){ return session.playerNum === 1 ? row.guesses2 : row.guesses1; }
   function myRange(){ return session.playerNum === 1 ? row.range1 : row.range2; }
 
   // ---------- GAME RENDER ----------
@@ -653,6 +642,7 @@
     document.getElementById('game-room-code').textContent = row.room_code;
     document.getElementById('game-players-label').textContent = myName() + " vs " + (otherName() || "—");
     document.getElementById('your-number').textContent = mySecret();
+    document.getElementById('opponent-ledger-title').textContent = (otherName() || "Their") + "'s guesses at your number";
 
     const isMyTurn = row.turn === session.playerNum;
     const banner = document.getElementById('turn-banner');
@@ -663,23 +653,23 @@
 
     document.getElementById('guess-input').disabled = !isMyTurn;
     document.getElementById('guess-submit-btn').disabled = !isMyTurn;
+    document.querySelectorAll('.guess-row .step-btn').forEach(b => b.disabled = !isMyTurn);
     document.getElementById('guess-input').value = "";
 
     const range = myRange();
-    document.getElementById('caliper-range-label').textContent =
-      "between " + range.low + " and " + range.high;
+    document.getElementById('caliper-range-label').textContent = "between " + range.low + " and " + range.high;
 
     renderCaliper(range, myGuesses());
-    renderLedger(myGuesses());
+    renderLedger('ledger-mine', myGuesses());
+    renderLedger('ledger-theirs', opponentGuesses());
+    tickTimer();
   }
 
   function renderCaliper(range, guesses){
     const el = document.getElementById('caliper');
     el.innerHTML = '<div class="caliper-track"></div>';
-
     const pct = v => Math.max(0, Math.min(100, (v/100)*100));
 
-    // zone highlight between bounds
     const lowPct = pct(Math.max(range.low,0));
     const highPct = pct(Math.min(range.high,101));
     const zone = document.createElement('div');
@@ -688,7 +678,6 @@
     zone.style.width = Math.max(0, highPct - lowPct) + '%';
     el.appendChild(zone);
 
-    // bound ticks (skip degenerate 0 / 101 placeholders)
     if (range.low > 0){
       const b = document.createElement('div');
       b.className = 'caliper-bound';
@@ -713,10 +702,10 @@
     });
   }
 
-  function renderLedger(guesses){
-    const el = document.getElementById('ledger');
+  function renderLedger(elId, guesses){
+    const el = document.getElementById(elId);
     el.innerHTML = "";
-    if (!guesses.length){
+    if (!guesses || !guesses.length){
       el.innerHTML = '<div class="ledger-empty">No guesses yet.</div>';
       return;
     }
@@ -741,15 +730,61 @@
       winnerName + " found " + loserName + "'s number (" + secret + ") in " + attempts + " " + (attempts === 1 ? "guess" : "guesses") + ".";
   }
 
-  // ---------- GUESS SUBMIT ----------
-  async function submitGuess(){
-    const input = document.getElementById('guess-input');
-    const guess = parseInt(input.value, 10);
-    if (isNaN(guess) || guess < 1 || guess > 100){
-      input.style.borderColor = 'var(--bad)';
-      return;
+  // ---------- TIMER ----------
+  function updateTimerUI(remaining, isMine){
+    const ringEl = document.getElementById('timer-circle');
+    const textEl = document.getElementById('timer-text');
+    if (!ringEl || !textEl) return;
+    const frac = Math.max(0, Math.min(1, remaining/TURN_SECONDS));
+    ringEl.style.strokeDashoffset = TIMER_CIRCUMFERENCE * (1 - frac);
+    textEl.textContent = Math.ceil(remaining);
+    ringEl.classList.toggle('warn', remaining <= 10);
+  }
+
+  function tickTimer(){
+    if (!row || row.status !== 'active' || !row.turn_started_at) return;
+    if (!document.getElementById('screen-game').classList.contains('active')) return;
+    const elapsed = (Date.now() - new Date(row.turn_started_at).getTime()) / 1000;
+    const remaining = Math.max(0, TURN_SECONDS - elapsed);
+    const isMyTurn = row.turn === session.playerNum;
+    updateTimerUI(remaining, isMyTurn);
+
+    if (remaining <= 0 && isMyTurn && lastAutoHandledTurnStart !== row.turn_started_at){
+      lastAutoHandledTurnStart = row.turn_started_at;
+      handleTimeout();
     }
-    input.style.borderColor = '';
+  }
+  setInterval(tickTimer, 250);
+
+  function handleTimeout(){
+    const typed = parseInt(document.getElementById('guess-input').value, 10);
+    let guess;
+    if (!isNaN(typed) && typed >= 1 && typed <= 100){
+      guess = typed;
+    } else {
+      const range = myRange();
+      let lo = range.low + 1, hi = range.high - 1;
+      if (lo > hi){ lo = 1; hi = 100; }
+      guess = lo + Math.floor(Math.random() * (hi - lo + 1));
+    }
+    showToast("Time's up — auto-submitted " + guess);
+    submitGuess(guess);
+  }
+
+  // ---------- GUESS SUBMIT ----------
+  async function submitGuess(overrideGuess){
+    let guess;
+    if (typeof overrideGuess === 'number'){
+      guess = overrideGuess;
+    } else {
+      const input = document.getElementById('guess-input');
+      guess = parseInt(input.value, 10);
+      if (isNaN(guess) || guess < 1 || guess > 100){
+        input.style.borderColor = 'var(--bad)';
+        return;
+      }
+      input.style.borderColor = '';
+    }
 
     const isP1 = session.playerNum === 1;
     const targetSecret = isP1 ? row.player2_secret : row.player1_secret;
@@ -776,6 +811,7 @@
       updates.winner = session.playerNum;
     } else {
       updates.turn = isP1 ? 2 : 1;
+      updates.turn_started_at = new Date().toISOString();
     }
 
     document.getElementById('guess-submit-btn').disabled = true;
@@ -794,6 +830,7 @@
     if (channel) db.removeChannel(channel);
     clearSession();
     row = null;
+    lastAutoHandledTurnStart = null;
     document.getElementById('create-name').value = "";
     document.getElementById('create-secret').value = "";
     document.getElementById('join-code').value = "";
@@ -801,7 +838,6 @@
     document.getElementById('join-secret').value = "";
     goTo('screen-landing');
   }
-
   function fullRestart(){ leaveRoom(); }
 
   // ---------- RESUME ON REFRESH ----------
