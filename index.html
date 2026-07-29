@@ -1003,8 +1003,7 @@
   }
 
   // ---------- RESTART / LEAVE ----------
-  async function leaveRoom(){
-    const idToDelete = session.roomId;
+  function leaveRoom(){
     if (channel){ db.removeChannel(channel); channel = null; }
     clearSession();
     row = null;
@@ -1015,11 +1014,8 @@
     document.getElementById('join-name').value = "";
     document.getElementById('join-secret').value = "";
     goTo('screen-landing');
-    // Best-effort: remove the room so the other player isn't left in limbo
-    // and it doesn't linger in the database. Harmless if it's already gone.
-    if (configured && idToDelete){
-      await db.from('games').delete().eq('id', idToDelete);
-    }
+    // Room rows are no longer auto-deleted from the client — clear them out
+    // from the Supabase table dashboard manually when you're done testing.
   }
   function fullRestart(){ leaveRoom(); }
 
@@ -1058,38 +1054,8 @@
   document.getElementById('create-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleCreate(); });
   document.getElementById('join-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleJoin(); });
 
-  // ---------- CLEANUP ON TAB CLOSE ----------
-  // Covers the case where someone just closes the tab/app instead of
-  // tapping "Cancel room" or "Back to home". We only do this from the
-  // pre-game waiting lobby, where no opponent has joined yet so nothing
-  // is lost. We deliberately do NOT do this from the win screen: on
-  // mobile, pagehide/beforeunload can fire just from backgrounding the
-  // tab or switching apps for a moment (not actually closing it), and
-  // deleting the room while someone is reading the result or picking a
-  // rematch number would kick the other player out with a false
-  // "opponent left" message. Rooms are cleared out manually instead.
-  function attemptBeaconDelete(id){
-    if (!configured || !id) return;
-    try {
-      fetch(SUPABASE_URL + '/rest/v1/games?id=eq.' + id, {
-        method: 'DELETE',
-        keepalive: true,
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch(e){ /* best effort only */ }
-  }
-
-  function handleUnload(){
-    if (!row) return;
-    const onWaiting = document.getElementById('screen-waiting').classList.contains('active');
-    if (onWaiting) attemptBeaconDelete(row.id);
-  }
-  window.addEventListener('pagehide', handleUnload);
-  window.addEventListener('beforeunload', handleUnload);
+  // Room rows are never auto-deleted by this client anymore — clear
+  // finished/abandoned rows out from the Supabase dashboard manually.
 
   // ---------- CONNECTION RESILIENCE ----------
   // Realtime websockets can silently drop on mobile (screen lock, backgrounded
