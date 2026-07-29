@@ -246,7 +246,16 @@
   @keyframes popIn{ from{ opacity:0; transform:scale(0.85); } to{ opacity:1; transform:scale(1); } }
   @media (prefers-reduced-motion: reduce){ .win-icon svg{ animation:none; } }
   .win-mark{ font-family:'Space Grotesk',sans-serif; font-size:1.9rem; font-weight:700; margin-bottom:6px; }
-  .win-sub{ color:var(--text-dim); margin-bottom:24px; line-height:1.5; }
+  .win-sub{ color:var(--text-dim); margin-bottom:18px; line-height:1.5; }
+
+  .reveal-row{ display:flex; gap:10px; margin-bottom:24px; }
+  .reveal-chip{
+    flex:1; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius-md); padding:12px 14px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .reveal-chip .lbl{ font-size:0.72rem; color:var(--text-faint); font-family:'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:0.05em; }
+  .reveal-chip .num{ font-size:1.25rem; font-weight:600; color:var(--text); }
 
   .footnote{ margin-top:auto; padding-top:22px; text-align:center; color:var(--text-faint); font-size:0.7rem; font-family:'IBM Plex Mono', monospace; }
 
@@ -305,6 +314,7 @@
     </div>
     <div class="pulse-row"><span class="pulse-dot"></span> Waiting for opponent to join…</div>
     <div class="spacer"></div>
+    <button class="btn ghost" onclick="refreshRow()" style="margin-bottom:10px;">Refresh</button>
     <button class="btn ghost" onclick="leaveRoom()">Cancel room</button>
   </div>
 
@@ -387,9 +397,47 @@
     <div class="win-icon" id="win-icon"></div>
     <div class="win-mark" id="win-mark">— wins</div>
     <p class="win-sub" id="win-sub"></p>
-    <div class="stack">
-      <button class="btn" onclick="fullRestart()">Back to home</button>
+    <div class="reveal-row">
+      <div class="reveal-chip">
+        <span class="lbl" id="reveal-my-label">You</span>
+        <span class="num mono" id="reveal-my-num">—</span>
+      </div>
+      <div class="reveal-chip">
+        <span class="lbl" id="reveal-their-label">Them</span>
+        <span class="num mono" id="reveal-their-num">—</span>
+      </div>
     </div>
+    <div class="stack">
+      <button class="btn" onclick="goToRematch()">Play again</button>
+      <button class="btn ghost" onclick="fullRestart()">Back to home</button>
+    </div>
+  </div>
+
+  <!-- REMATCH: pick a new secret -->
+  <div class="screen" id="screen-rematch-secret">
+    <div class="eyebrow">Same room · new round</div>
+    <h1 class="title">Pick your next number</h1>
+    <p class="lede">Choose a new secret number between 1 and 100 for the next round.</p>
+    <label class="field-label" for="rematch-secret-input">Your secret number (1–100)</label>
+    <div class="stepper">
+      <button type="button" class="step-btn" data-target="rematch-secret-input" data-step="-1" aria-label="Decrease">−</button>
+      <input type="number" class="step-input" id="rematch-secret-input" min="1" max="100" inputmode="numeric" placeholder="—">
+      <button type="button" class="step-btn" data-target="rematch-secret-input" data-step="1" aria-label="Increase">+</button>
+    </div>
+    <div class="stack" style="margin-top:8px;">
+      <button class="btn" id="rematch-submit-btn" onclick="submitRematchSecret()">Lock it in</button>
+      <button class="btn ghost" onclick="goTo('screen-win')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- REMATCH: waiting for opponent -->
+  <div class="screen" id="screen-rematch-waiting">
+    <div class="eyebrow">Same room · new round</div>
+    <h1 class="title">Number locked in</h1>
+    <p class="lede">Waiting for <span id="rematch-waiting-name">your opponent</span> to pick their next number.</p>
+    <div class="pulse-row"><span class="pulse-dot"></span> Round starts as soon as they're ready…</div>
+    <div class="spacer"></div>
+    <button class="btn ghost" onclick="leaveRoom()">Leave game</button>
   </div>
 
   <div class="footnote">Between · a two-player deduction game</div>
@@ -622,32 +670,121 @@
 
   function onRowUpdate(){
     if (!row) return;
-    if (row.status === 'active' && document.getElementById('screen-waiting').classList.contains('active')){
+
+    if (row.status === 'active'){
+      finishedCleanupScheduled = false;
+      const alreadyOnGame = document.getElementById('screen-game').classList.contains('active');
+      const cameFromRematch = document.getElementById('screen-rematch-waiting').classList.contains('active')
+        || document.getElementById('screen-rematch-secret').classList.contains('active')
+        || document.getElementById('screen-win').classList.contains('active');
       renderGame();
-      goTo('screen-game');
-      showToast(otherName() + " joined — game on.");
+      if (!alreadyOnGame){
+        goTo('screen-game');
+        showToast(cameFromRematch ? "Rematch! New round started." : otherName() + " joined — game on.");
+      }
       return;
     }
+
     if (row.status === 'finished'){
       renderWin();
       goTo('screen-win');
       scheduleFinishedCleanup();
       return;
     }
+
+    if (row.status === 'rematch'){
+      finishedCleanupScheduled = false;
+      const mineField = session.playerNum === 1 ? 'rematch_secret1' : 'rematch_secret2';
+      const otherField = session.playerNum === 1 ? 'rematch_secret2' : 'rematch_secret1';
+      if (row[mineField] != null && row[otherField] != null){
+        finalizeRematch();
+        return;
+      }
+      if (row[otherField] != null && document.getElementById('screen-win').classList.contains('active')){
+        showToast(otherName() + " wants a rematch — pick your number when ready.");
+      }
+      return;
+    }
+
     if (document.getElementById('screen-game').classList.contains('active')){
       renderGame();
     }
   }
 
   // Once a game finishes, clear the room from the database a few seconds
-  // later so both players have time to see the result first.
+  // later so both players have time to see the result — unless a rematch
+  // has since started, which this re-checks right before deleting.
   function scheduleFinishedCleanup(){
     if (finishedCleanupScheduled || !row) return;
     finishedCleanupScheduled = true;
     const idToDelete = row.id;
-    setTimeout(() => {
-      if (configured) db.from('games').delete().eq('id', idToDelete);
-    }, 4000);
+    setTimeout(async () => {
+      if (!configured) return;
+      const { data } = await db.from('games').select('status').eq('id', idToDelete).single();
+      if (data && data.status === 'finished'){
+        await db.from('games').delete().eq('id', idToDelete);
+      }
+    }, 6000);
+  }
+
+  // ---------- REMATCH ----------
+  function goToRematch(){
+    document.getElementById('rematch-secret-input').value = '';
+    goTo('screen-rematch-secret');
+  }
+
+  async function submitRematchSecret(){
+    const input = document.getElementById('rematch-secret-input');
+    const value = parseInt(input.value, 10);
+    if (isNaN(value) || value < 1 || value > 100){
+      input.style.borderColor = 'var(--bad)';
+      return;
+    }
+    input.style.borderColor = '';
+
+    const mineField = session.playerNum === 1 ? 'rematch_secret1' : 'rematch_secret2';
+    const btn = document.getElementById('rematch-submit-btn');
+    btn.disabled = true; btn.textContent = "Submitting…";
+
+    const { data, error } = await db.from('games')
+      .update({ [mineField]: value, status: 'rematch' })
+      .eq('id', row.id).select().single();
+
+    btn.disabled = false; btn.textContent = "Lock it in";
+
+    if (error || !data){
+      showToast("Couldn't submit — try again.");
+      return;
+    }
+    row = data;
+    finishedCleanupScheduled = false;
+
+    if (row.rematch_secret1 != null && row.rematch_secret2 != null){
+      await finalizeRematch();
+    } else {
+      document.getElementById('rematch-waiting-name').textContent = otherName();
+      goTo('screen-rematch-waiting');
+    }
+  }
+
+  async function finalizeRematch(){
+    const updates = {
+      player1_secret: row.rematch_secret1,
+      player2_secret: row.rematch_secret2,
+      guesses1: [], guesses2: [],
+      range1: { low:0, high:101 }, range2: { low:0, high:101 },
+      turn: 1,
+      turn_started_at: new Date().toISOString(),
+      status: 'active',
+      winner: null,
+      rematch_secret1: null,
+      rematch_secret2: null
+    };
+    const { data, error } = await db.from('games').update(updates).eq('id', row.id).select().single();
+    if (!error && data){
+      row = data;
+      onRowUpdate();
+    }
   }
 
   // Fires when the room row is deleted — either because it just finished
@@ -777,6 +914,11 @@
       markEl.textContent = winnerName + " wins";
       subEl.textContent = winnerName + " found your number (" + mySecret() + ") in " + tries + ". Better luck next time.";
     }
+
+    document.getElementById('reveal-my-label').textContent = myName();
+    document.getElementById('reveal-my-num').textContent = mySecret();
+    document.getElementById('reveal-their-label').textContent = otherName();
+    document.getElementById('reveal-their-num').textContent = session.playerNum === 1 ? row.player2_secret : row.player1_secret;
   }
 
   // ---------- TIMER ----------
@@ -909,6 +1051,18 @@
     else if (data.status === 'waiting'){
       document.getElementById('waiting-code').textContent = data.room_code;
       goTo('screen-waiting');
+    } else if (data.status === 'rematch'){
+      const mineField = session.playerNum === 1 ? 'rematch_secret1' : 'rematch_secret2';
+      const otherField = session.playerNum === 1 ? 'rematch_secret2' : 'rematch_secret1';
+      if (data[mineField] != null && data[otherField] != null){
+        await finalizeRematch();
+      } else if (data[mineField] != null){
+        document.getElementById('rematch-waiting-name').textContent = otherName();
+        goTo('screen-rematch-waiting');
+      } else {
+        renderWin();
+        goTo('screen-win');
+      }
     } else {
       renderGame();
       goTo('screen-game');
@@ -918,6 +1072,63 @@
   document.getElementById('guess-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitGuess(); });
   document.getElementById('create-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleCreate(); });
   document.getElementById('join-secret').addEventListener('keydown', e => { if (e.key === 'Enter') handleJoin(); });
+
+  // ---------- CLEANUP ON TAB CLOSE ----------
+  // Covers the case where someone just closes the tab/app instead of
+  // tapping "Cancel room" or "Back to home". We only do this on screens
+  // where losing the room is harmless either way (nobody's mid-game and
+  // relying on refresh-to-resume): the pre-game waiting lobby, and the
+  // win screen once a game has already finished.
+  function attemptBeaconDelete(id){
+    if (!configured || !id) return;
+    try {
+      fetch(SUPABASE_URL + '/rest/v1/games?id=eq.' + id, {
+        method: 'DELETE',
+        keepalive: true,
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch(e){ /* best effort only */ }
+  }
+
+  function handleUnload(){
+    if (!row) return;
+    const onWaiting = document.getElementById('screen-waiting').classList.contains('active');
+    const onWin = document.getElementById('screen-win').classList.contains('active');
+    if (onWaiting || onWin) attemptBeaconDelete(row.id);
+  }
+  window.addEventListener('pagehide', handleUnload);
+  window.addEventListener('beforeunload', handleUnload);
+
+  // ---------- CONNECTION RESILIENCE ----------
+  // Realtime websockets can silently drop on mobile (screen lock, backgrounded
+  // tab, wifi/cellular switch) without erroring — so an update can happen in
+  // the database but never reach a stale connection. These act as a safety
+  // net: periodic polling catches anything missed, and regaining focus forces
+  // a fresh subscription plus an immediate re-fetch.
+  async function refreshRow(){
+    if (!configured || !session.roomId) return;
+    const { data, error } = await db.from('games').select().eq('id', session.roomId).single();
+    if (error){
+      if (error.code === 'PGRST116') handleRoomDeleted(); // row genuinely gone
+      return;
+    }
+    if (!data) return;
+    row = data;
+    onRowUpdate();
+  }
+  setInterval(refreshRow, 4000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && session.roomId){
+      subscribeToRoom(session.roomId); // fresh websocket, in case the old one died quietly
+      refreshRow();
+    }
+  });
+  window.addEventListener('online', () => { if (session.roomId) refreshRow(); });
 
   tryResume();
 </script>
