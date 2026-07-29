@@ -657,8 +657,6 @@
   }
 
   // ---------- REALTIME ----------
-  let finishedCleanupScheduled = false;
-
   function subscribeToRoom(id){
     if (channel) db.removeChannel(channel);
     channel = db.channel('games-' + id)
@@ -673,7 +671,6 @@
     if (!row) return;
 
     if (row.status === 'active'){
-      finishedCleanupScheduled = false;
       const alreadyOnGame = document.getElementById('screen-game').classList.contains('active');
       const cameFromRematch = document.getElementById('screen-rematch-waiting').classList.contains('active')
         || document.getElementById('screen-rematch-secret').classList.contains('active')
@@ -689,12 +686,10 @@
     if (row.status === 'finished'){
       renderWin();
       goTo('screen-win');
-      scheduleFinishedCleanup();
       return;
     }
 
     if (row.status === 'rematch'){
-      finishedCleanupScheduled = false;
       const mineField = session.playerNum === 1 ? 'rematch_secret1' : 'rematch_secret2';
       const otherField = session.playerNum === 1 ? 'rematch_secret2' : 'rematch_secret1';
       if (row[mineField] != null && row[otherField] != null){
@@ -710,27 +705,6 @@
     if (document.getElementById('screen-game').classList.contains('active')){
       renderGame();
     }
-  }
-
-  // Once a game finishes, clear the room from the database eventually so it
-  // doesn't linger forever — unless a rematch has since started, which this
-  // re-checks right before deleting. This is only a safety net (the normal
-  // cleanup path is the explicit "Back to home" button and the tab-close
-  // beacon below); it must give both players realistic time to read the
-  // result, decide to rematch, and lock in new numbers, so it's several
-  // minutes, not seconds.
-  const FINISHED_CLEANUP_MS = 5 * 60 * 1000; // 5 minutes
-  function scheduleFinishedCleanup(){
-    if (finishedCleanupScheduled || !row) return;
-    finishedCleanupScheduled = true;
-    const idToDelete = row.id;
-    setTimeout(async () => {
-      if (!configured) return;
-      const { data } = await db.from('games').select('status').eq('id', idToDelete).single();
-      if (data && data.status === 'finished'){
-        await db.from('games').delete().eq('id', idToDelete);
-      }
-    }, FINISHED_CLEANUP_MS);
   }
 
   // ---------- REMATCH ----------
@@ -763,7 +737,6 @@
       return;
     }
     row = data;
-    finishedCleanupScheduled = false;
 
     if (row.rematch_secret1 != null && row.rematch_secret2 != null){
       await finalizeRematch();
@@ -1036,7 +1009,6 @@
     clearSession();
     row = null;
     lastAutoHandledTurnStart = null;
-    finishedCleanupScheduled = false;
     document.getElementById('create-name').value = "";
     document.getElementById('create-secret').value = "";
     document.getElementById('join-code').value = "";
@@ -1060,7 +1032,7 @@
     if (error || !data){ clearSession(); return; }
     row = data;
     subscribeToRoom(data.id);
-    if (data.status === 'finished'){ renderWin(); goTo('screen-win'); scheduleFinishedCleanup(); }
+    if (data.status === 'finished'){ renderWin(); goTo('screen-win'); }
     else if (data.status === 'waiting'){
       document.getElementById('waiting-code').textContent = data.room_code;
       goTo('screen-waiting');
@@ -1088,10 +1060,14 @@
 
   // ---------- CLEANUP ON TAB CLOSE ----------
   // Covers the case where someone just closes the tab/app instead of
-  // tapping "Cancel room" or "Back to home". We only do this on screens
-  // where losing the room is harmless either way (nobody's mid-game and
-  // relying on refresh-to-resume): the pre-game waiting lobby, and the
-  // win screen once a game has already finished.
+  // tapping "Cancel room" or "Back to home". We only do this from the
+  // pre-game waiting lobby, where no opponent has joined yet so nothing
+  // is lost. We deliberately do NOT do this from the win screen: on
+  // mobile, pagehide/beforeunload can fire just from backgrounding the
+  // tab or switching apps for a moment (not actually closing it), and
+  // deleting the room while someone is reading the result or picking a
+  // rematch number would kick the other player out with a false
+  // "opponent left" message. Rooms are cleared out manually instead.
   function attemptBeaconDelete(id){
     if (!configured || !id) return;
     try {
@@ -1110,8 +1086,7 @@
   function handleUnload(){
     if (!row) return;
     const onWaiting = document.getElementById('screen-waiting').classList.contains('active');
-    const onWin = document.getElementById('screen-win').classList.contains('active');
-    if (onWaiting || onWin) attemptBeaconDelete(row.id);
+    if (onWaiting) attemptBeaconDelete(row.id);
   }
   window.addEventListener('pagehide', handleUnload);
   window.addEventListener('beforeunload', handleUnload);
