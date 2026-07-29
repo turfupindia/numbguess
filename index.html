@@ -258,6 +258,7 @@
   .reveal-chip .num{ font-size:1.25rem; font-weight:600; color:var(--text); }
 
   .footnote{ margin-top:auto; padding-top:22px; text-align:center; color:var(--text-faint); font-size:0.7rem; font-family:'IBM Plex Mono', monospace; }
+  .footnote a{ color:var(--text-faint); }
 
   .toast{
     position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
@@ -440,7 +441,7 @@
     <button class="btn ghost" onclick="leaveRoom()">Leave game</button>
   </div>
 
-  <div class="footnote">Between · a two-player deduction game</div>
+  <div class="footnote">Between · a two-player deduction game · <a href="reveal.html">Prefer words? Play Reveal</a></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -711,9 +712,14 @@
     }
   }
 
-  // Once a game finishes, clear the room from the database a few seconds
-  // later so both players have time to see the result — unless a rematch
-  // has since started, which this re-checks right before deleting.
+  // Once a game finishes, clear the room from the database eventually so it
+  // doesn't linger forever — unless a rematch has since started, which this
+  // re-checks right before deleting. This is only a safety net (the normal
+  // cleanup path is the explicit "Back to home" button and the tab-close
+  // beacon below); it must give both players realistic time to read the
+  // result, decide to rematch, and lock in new numbers, so it's several
+  // minutes, not seconds.
+  const FINISHED_CLEANUP_MS = 5 * 60 * 1000; // 5 minutes
   function scheduleFinishedCleanup(){
     if (finishedCleanupScheduled || !row) return;
     finishedCleanupScheduled = true;
@@ -724,7 +730,7 @@
       if (data && data.status === 'finished'){
         await db.from('games').delete().eq('id', idToDelete);
       }
-    }, 6000);
+    }, FINISHED_CLEANUP_MS);
   }
 
   // ---------- REMATCH ----------
@@ -767,7 +773,11 @@
     }
   }
 
+  let finalizingRematch = false;
   async function finalizeRematch(){
+    if (finalizingRematch) return;
+    finalizingRematch = true;
+    try {
     const updates = {
       player1_secret: row.rematch_secret1,
       player2_secret: row.rematch_secret2,
@@ -784,6 +794,9 @@
     if (!error && data){
       row = data;
       onRowUpdate();
+    }
+    } finally {
+      finalizingRematch = false;
     }
   }
 
